@@ -239,45 +239,6 @@ Another problem with the datasets, is in the transactions table.  The transactio
 
 #### Question
 
-Now generate a version of the same report using the data on views and transactions from the month of February 2020.
-
-In building this report, do not create a new RMarkdown file.  Instead, build a small .R file that allows the user to specify some parameters (e.g. the names of the files).  Then use the **render** function in the **rmarkdown** library to run the report.  Supply these new parameters as a list object in the **params** input.  Then you can make use of these parameters within the RMarkdown file.  For instance, if your file name is **"views -- January 2020.csv"** and it is stored as params\$views.file, then you can read the data with **fread(input = params\$views.file)**
-
-Use the **dir.create** function to build new subfolders to store each month's report.  Specify a name for the output file when calling the **render** function.  Use this method to generate the separate reports for January and February.
-
-Briefly describe your process for implementing this automated approach.  What work would a non-technical user need to perform to run this script without your involvement?
-
-
-#### Answer
-
-A non-technical user would need to update the dates to access the correct files to import.  
-
-
-*Struggled to actually produce the report, please see my attempt at code below
-
-#Render function
-render_report <- function(beginning.date, ending.date) {
-template <- "Template-- Part2.rmd"
-
-out_file <- sprintf("../Reports/Monthly Reports/%s%s", the.year, the.month)
-
-parameters <- list(beginning.date, ending.date)
-rmarkdown::render(template, out_file, parameters)
-}
-
-beginning.date <- "2020-02-04"
-ending.date <- "2020-02-08"
-report.name <- "Feb 2020 Monthly Report"
-params<- list(beginning.date = beginning.date, ending.date = ending.date, report.name = report.name)
-the.year <- lubridate::year(ending.date)
-the.month <- lubridate::month(ending.date)
-out.path <- sprintf("../Reports/Monthly Reports/%s%s", the.year, the.month)
-dir.create(path = out.path, showWarnings = F, recursive = T)
-
-### Q3
-
-#### Question
-
 What are the advantages of creating an automated approach to routine reporting?
 
 #### Answers
