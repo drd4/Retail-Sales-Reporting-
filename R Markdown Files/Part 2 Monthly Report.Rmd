@@ -1,0 +1,391 @@
+---
+title: "Retail Transactions:  Monthly Report"
+author: "Daniel Dasgupta"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r seed}
+set.seed(41)
+```
+
+```{r libraries, echo = FALSE, warning=FALSE, message=FALSE}
+library(data.table)
+library(DT)
+library(rmarkdown)
+library(lubridate)
+
+```
+
+```{r constants}
+
+#files constants
+file.customers.data <- "customers.csv"
+file.product.data <- "products.csv"
+file.views.data <- "views -- January 2020.csv"
+file.trans.data <- "transactions -- January 2020.csv"
+
+#variables 
+customer.id.name <- "customer_id"
+age.name <- "age"
+gender.name <- "gender"
+income.name <- "income"
+region.name <- "region"
+category.name <- "category"
+price.name <- "price"
+product.id.name <- "product_id"
+
+#thresholds
+trans.threshold = 1
+income.threshold = 10000
+
+```
+
+```{r functions}
+round.numerics <- function(x, digits) {
+  if (is.numeric(x)) {
+    x <- round(x = x, digits = digits)
+  }
+  return(x)
+}
+
+
+
+rounded.sum <- function(x, digits){
+  if(is.numeric(x) == TRUE){
+    x <- round(x = sum(x), digits = digits)
+  }
+  return(x)
+}
+
+
+summarize.variable <- function(dat, variable.name, by.name ) {
+  require(data.table)
+  require(DT)
+  setDT(dat)
+  
+  tab = dat[, .(mean = mean(get(variable.name), na.rm = T),
+                sd = sd(get(variable.name), na.rm = T), 
+                median = median(get(variable.name))), by = eval(by.name)]
+  
+  datatable(data = tab[, lapply(X = .SD, FUN = "round.numerics", digits = 1)], 
+            rownames = F)
+}
+```
+
+```{r load_data}
+dat.customers <- fread(input = file.customers.data)
+dat.products <- fread(input = file.product.data)
+dat.views <- fread(input = file.views.data)
+dat.trans <- fread(input = file.trans.data)
+
+```
+
+
+
+## Part 2:  Specific Questions {.tabset}
+
+This part of the report will be directed to product managers throughout the client's company.  The idea is to give them the useful information they need to act on the specific questions they posed.  Plan your communication accordingly.
+
+For this report, make sure to use all of the data that was provided to you for the month.  If you do note any issues with the data (Part 3), this can be reported to the engineering team for them to resolve.
+
+### Q1
+
+#### Question
+
+During the first week of the month, what were the 10 most viewed products?  Show the results in a table with the product's identifier, category, and count of the number of views.
+
+#### Answer
+
+```{r part2_q1}
+
+
+#clean time, separate date and hours/mins/sec by character T
+dat.views$time <- gsub("T.*","",dat.views$time)
+
+dat.views.first.week <-  dat.views[time >= "2020-01-01" & time <= "2020-01-07"]
+tab.views.most.viewed.products <- dat.views.first.week[, .N, by = product.id.name]
+setorderv(x = tab.views.most.viewed.products, cols = "N", order = -1)
+tab.views.most.viewed.products <- tab.views.most.viewed.products[1:10]
+
+
+#remove price from products table 
+products = dat.products[, category, product_id]
+part2_q1 <- merge(tab.views.most.viewed.products, products, by = product.id.name)
+datatable(part2_q1)
+```
+
+### Q2
+
+#### Question
+
+During the whole month, what were the 10 most viewed products for each category?  Show the results in separate tables by category.  Including only the product's identifier and the count of the number of views.
+
+
+#### Answer {.tabset}
+
+```{r part2_q2_overall_calculations}
+
+#filter the month dates 
+jan.views <- dat.views[time <= '2020-01-31']
+
+#count of most popular products 
+tab.monthly.products <- jan.views[, .N, by = product.id.name]
+#use products from previous question
+part2_q2 <- merge(tab.monthly.products, products, by = product.id.name)
+```
+
+##### Shirt
+
+```{r part2_q2_shirt}
+shirt <- part2_q2[category == "shirt"]
+setorderv(x = shirt, cols = "N", order= -1)
+shirt <- shirt[1:10][,  N, product_id]
+datatable(shirt)
+
+```
+
+##### Pants
+
+```{r part2_q2_pants}
+
+pants <- part2_q2[category == "pants"]
+setorderv(x = pants, cols = "N", order= -1)
+pants <- pants[1:10][,  N, product_id]
+datatable(pants)
+```
+
+##### Coat
+
+```{r part2_q2_coat}
+
+coat <- part2_q2[category == "coat"]
+setorderv(x = coat, cols = "N", order= -1)
+coat <- coat[1:10][,  N, product_id]
+datatable(coat)
+```
+
+##### Shoes
+
+```{r part2_q2_shoes}
+
+shoes <- part2_q2[category == "shoes"]
+setorderv(x = shoes, cols = "N", order= -1)
+shoes <- shoes[1:10][,  N, product_id]
+datatable(shoes)
+```
+
+##### Hat
+
+```{r part2_q2_hat}
+
+hat <- part2_q2[category == "hat"]
+setorderv(x = hat, cols = "N", order= -1)
+hat <- hat[1:10][,  N, product_id]
+datatable(hat)
+```
+
+
+### Q3
+
+#### Question
+
+What was the total revenue for each category of product during the month?  Show the results in a single table sorted in decreasing order.
+
+#### Answer
+
+```{r part2_q3}
+
+#multiple quant by price 
+dat.trans[, trans_revenue := price*quantity ]
+
+#merge products with trans to get category
+
+revenue.by.category <- merge(dat.trans, dat.products, by = c("product_id", "price"))
+revenue.by.category <- revenue.by.category[, category, trans_revenue]
+
+#calculate the average of each numeric variable grouped by specific
+tab.revenue.by.category = revenue.by.category[, lapply(X = .SD, FUN = "rounded.sum", digits = 1), by = category.name]
+setorderv(x = tab.revenue.by.category, cols = "trans_revenue", order = -1 )
+datatable(tab.revenue.by.category)
+```
+
+### Q4
+
+#### Question
+
+Among customers with at least one transaction, show the average, median, and standard deviation of the customers' monthly spending on the site.
+
+#### Answer
+
+```{r part2_q4, warning = FALSE, echo=FALSE, results=FALSE}
+
+#first get customers with more than one transaction
+#create a transaction column 
+dat.trans[, total_transactions := .N, keyby = customer.id.name]
+dat.trans[total_transactions >= trans.threshold]
+
+#summarize.variable(dat.trans, "trans_revenue", "customer_id")
+```
+
+```{r part2_q4_output, warning = FALSE}
+summarize.variable(dat.trans, "trans_revenue", "customer_id")
+
+```
+
+### Q5
+
+#### Question
+
+What is the percentage distribution of spending by gender?  Show the amount of revenue and the percentage.
+
+#### Answer
+
+```{r part2_q5}
+
+tab.spend.by.gender <- merge(dat.trans, dat.customers, by = customer.id.name)
+
+totalrev <- round.numerics(sum(tab.spend.by.gender$price*tab.spend.by.gender$quantity), 2)
+part2_q5 <-tab.spend.by.gender[, .(spending = sum(price*quantity), percent_dist = round((sum(price*quantity)/totalrev)*100, 2)), by = gender]
+part2_q5$spending <- round.numerics(part2_q5$spending, 2)
+
+datatable(part2_q5)
+```
+
+### Q6
+
+#### Question
+
+Using linear regression, what is the effect of an extra ten thousand dollars of income on monthly spending for a customer while adjusting for age, gender, and region?
+
+#### Answer
+
+```{r part2_q6}
+
+dat.trans.top.spenders <- merge(dat.trans, dat.customers, by = customer.id.name)
+
+
+dat.trans.top.spenders <- dat.trans[,.(amount_spent=sum(price)), by = customer_id]
+
+dat.trans.top.spenders.total <- merge(dat.trans.top.spenders, dat.customers, by = customer.id.name)
+
+mod1 <- lm(amount_spent ~ age + gender + region + income, dat = dat.trans.top.spenders.total)
+
+part2_q6 <- summary(mod1)$coefficients[7,1]*income.threshold
+
+part2_q6 <- round.numerics(part2_q6, 2)
+
+
+```
+
+An extra 10,000 dollars in income increases monthly spending for a customer by $`r part2_q6`, while adjusting for age, gender, and region.  
+
+### Q7
+
+#### Question
+
+Among customers who viewed at least 1 product, how many had at least one purchase during the month?  Show the total number and as a percentage of the users with a view.
+
+#### Answer
+
+```{r part2_q7}
+
+jan.views <- dat.views[time <= '2020-01-31']
+
+
+dat.trans$time <- strftime(dat.trans$time, format = "%Y-%m-%d")
+jan.trans <- dat.trans[time <= '2020-01-31']
+jan.views$trans <- as.character(jan.views$trans)
+
+
+trans_views <- merge(jan.views, jan.trans, by = c("customer_id", "product_id", "time"))
+
+views_count <- jan.views[,.N, by = customer_id]
+
+views_and_buy <- trans_views[,.N, by= customer_id]
+
+percentage <- round(nrow(views_and_buy)/nrow(views_count)*100,2)
+
+q7.tab <- matrix(c(nrow(views_count), nrow(views_and_buy),"100", percentage), ncol = 2, byrow =FALSE)
+colnames(q7.tab) <- c('Count', 'Percentage')
+rownames(q7.tab) <- c(">= 1 View", "View and Bought")
+#as.table(q7.tab)
+
+datatable(q7.tab)
+```
+
+### Q8
+
+#### Question
+
+Now let's look at the viewing habits in different age groups, including 18-34, 35-49, 50-64, and 65+.  Within each group, what were the mean, median, and standard deviation for the number of unique products viewed per customer?
+
+#### Answer
+
+```{r part2_q8}
+
+unique.products <- dat.views[, .(count = length(unique(product_id))), by = customer_id]
+
+views_customers <- merge(unique.products, dat.customers, by = "customer_id")
+
+views_customers$age_group <- cut(views_customers$age, breaks = c(17,34,49,64,67), labels = c("18-34", "35-49", "50-64", "65+"))
+
+q8_tab <- views_customers[, .(mean = mean(count), median = median(count), sd = sd(count)), by = age_group]
+
+q8_tab$mean <-round(q8_tab$mean, 2)
+q8_tab$sd <- round(q8_tab$sd, 2)
+
+datatable(q8_tab)
+```
+
+
+### Q9 
+
+#### Question
+
+What is the correlation between a user's total page views and total spending?  For customers without a transaction, include their spending as zero.
+
+#### Answer
+
+```{r part2_q9}
+
+view.count <- dat.views[, .(viewcount = .N), by = customer_id]
+
+trans.total <- dat.trans[, .(spent = sum(price*quantity)), by = customer_id]
+
+q9_dat <-merge(view.count, trans.total, by = "customer_id", all.x = TRUE)
+
+q9_dat[is.na(q9_dat)] <- 0
+
+corr <- round(cor(q9_dat$viewcount, q9_dat$spent)*100,2)
+```
+The correlation between a user's total page views and total spending is `r corr`. 
+
+### Q10
+
+#### Question
+
+Which customer purchased the largest number of coats?  In the event of a tie, include all of the users who reached this value.  Show their identifiers and total volume.
+
+#### Answer
+
+```{r part2_q10}
+
+q10 <- merge(dat.customers, dat.trans, by = customer.id.name)
+
+q10 <- merge(q10, dat.products, by = c(product.id.name, "price"))
+
+
+q10<- q10[, .(customer_id, product_id, category, trans_revenue, age, gender, income, region, quantity) ]
+
+coats <- q10[category =="coat", .(bought = sum(quantity)), by = "customer_id"]
+setorderv(coats, cols= "bought", order = -1)
+#max(coats$bought)
+coats <- coats[bought == 50]
+
+datatable(coats)
+```
+

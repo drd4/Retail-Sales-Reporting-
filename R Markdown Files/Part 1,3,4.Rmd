@@ -1,0 +1,351 @@
+---
+title: 'Retail Transactions: Extensions and Opportunities'
+author: "Daniel Dasgupta"
+date: "`r Sys.Date()`"
+output:
+  rmarkdown::html_document:
+      theme: lumen
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+options(scipen = 999)
+set.seed(69)
+```
+```{r libraries, echo = FALSE, warning=FALSE, message=FALSE}
+library(data.table)
+library(DT)
+library(rmarkdown)
+library(lubridate)
+
+```
+
+
+```{r functions}
+round.numerics <- function(x, digits) {
+  if (is.numeric(x)) {
+    x <- round(x = x, digits = digits)
+  }
+  return(x)
+}
+
+
+
+rounded.sum <- function(x, digits){
+  if(is.numeric(x) == TRUE){
+    x <- round(x = sum(x), digits = digits)
+  }
+  return(x)
+}
+
+
+summarize.variable <- function(dat, variable.name, by.name ) {
+  require(data.table)
+  require(DT)
+  setDT(dat)
+  
+  tab = dat[, .(mean = mean(get(variable.name), na.rm = T),
+                sd = sd(get(variable.name), na.rm = T), 
+                median = median(get(variable.name))), by = eval(by.name)]
+  
+  datatable(data = tab[, lapply(X = .SD, FUN = "round.numerics", digits = 1)], 
+            rownames = F)
+}
+
+```
+
+
+```{r constants}
+
+#files constants
+file.customers.data <- "customers.csv"
+file.product.data <- "products.csv"
+file.views.data <- "views -- January 2020.csv"
+file.trans.data <- "transactions -- January 2020.csv"
+
+#variables 
+customer.id.name <- "customer_id"
+age.name <- "age"
+gender.name <- "gender"
+income.name <- "income"
+region.name <- "region"
+category.name <- "category"
+price.name <- "price"
+product.id.name <- "product_id"
+
+#thresholds
+trans.threshold = 1
+income.threshold = 10000
+
+
+
+```
+
+```{r read_data}
+dat.customers <- fread(input = file.customers.data)
+dat.products <- fread(input = file.product.data)
+dat.views <- fread(input = file.views.data)
+dat.trans <- fread(input = file.trans.data)
+
+```
+
+
+## Part 1:  Summary  {.tabset}
+
+#### Instructions: 
+The following introduction contains a glimpse into the contents of the data.  
+There is a section for each dataset - to use new data, simply update the file constant 
+and run the document.  
+
+### Customers
+```{r customers_data_exploration, echo = FALSE}
+unique.customer.count <- dat.customers[, .( `Number of Unique IDs` = length(unique(get(customer.id.name))))]
+
+#dat.customers[, summary(get(age.name))]
+mean.customer.age <- round(dat.customers[, mean(age)],2)
+
+#dat.customers[, summary(get(income.name))]
+mean.customer.income <-  round(dat.customers[, mean(income)],2)
+
+dat.customers.female <- round(dat.customers[,.(pct_female = mean(gender=="F"))],3)*100
+
+
+```
+
+The customer dataset includes customer_id, age, income, and region.  The file includes `r unique.customer.count` unique customers. The mean age is `r mean.customer.age`, mean income is $`r mean.customer.income`, and `r dat.customers.female`% of the customers are female.   The data includes geographic locations: the breakdown of customers by region is in the table below. Note, percentages are in decimal form and are rounded to 4 digits as the difference between region share is very small. 
+
+
+```{r customers_region_table}
+tab.customers <- round(dat.customers[, .(pct_northeast = mean(region == "Northeast"), pct_south = mean(region == "South"), 
+        pct_midwest = mean(region == "Midwest"), pct_west = mean(region == "West"))],4)
+
+datatable(data = tab.customers)
+```
+
+### Products 
+```{r products_data_exploration, echo=FALSE}
+unique.products <- dat.products[, .( `Number of Unique IDs` = length(unique(get(product.id.name))))]
+#dat.products[, summary(get(price.name))]
+
+
+max.product.price <- dat.products[, .(max_price = max(price))]
+min.product.price <-dat.products[, .(min_price = min(price))]
+```
+
+The products dataset includes product_id, category (shoes, coat, shirt, pants, hat), and price.
+The file has `r unique.products` unique products. The most expensive product sold for $`r max.product.price` and cheapest product
+sold for $`r min.product.price`.   The table below shows a breakdown of the most popular products and the average price.  
+
+```{r products_table}
+#avg price of products 
+
+tab.products.mean.price <- dat.products[, .(mean_price = mean(price)), keyby = category.name]
+setorderv(x = tab.products.mean.price, cols = "mean_price", order = -1)
+tab.products.mean.price <- tab.products.mean.price[, lapply(X = .SD, FUN = "round.numerics", digits = 1)]
+
+#tab.products.mean.price 
+
+# most popular product categories
+tab.products.most.popular <- dat.products[, .N, by = category.name]
+setorderv(x = tab.products.most.popular, cols = "N", order = -1)
+#tab.products.most.popular[1:5]
+
+tab.products.aggregate <- merge(tab.products.mean.price, tab.products.most.popular, by = category.name)
+datatable(data = tab.products.aggregate)
+```
+
+
+### Views
+
+```{r Views_data_exploration, echo = FALSE}
+
+views.count <- nrow(dat.views)
+unique.views <- dat.views[, length(unique(dat.views$customer_id))]
+
+```
+The views dataset includes product_id, customer_id and time.  The file has `r views.count` rows, with `r unique.views` unique customer ids.  The table below shows the most frequent customer ids and product ids that were viewed.  
+
+```{r views_tab}
+
+# count of #products purchased by customer 
+tab.views.active.customers<- dat.views[, .N, by = customer.id.name]
+setorderv(x = tab.views.active.customers, cols = "N", order = -1)
+tab.views.active.customers <- tab.views.active.customers[1:5]
+
+# most popular products 
+tab.views.popular.products <- dat.views[, .N, by = product.id.name]
+setorderv(x = tab.views.popular.products, cols = "N", order = -1)
+tab.views.popular.products <- tab.views.popular.products[1:5]
+
+
+dat.views.tab <- cbind(tab.views.active.customers, tab.views.popular.products)
+datatable(dat.views.tab)
+
+```
+
+### Transactions 
+
+```{r Transactions_data_exploration, echo = FALSE}
+
+#Total Transactions
+
+tab.trans.transactions <- dat.trans[, .('Total Transactions' = .N)]
+
+#Number of Customers 
+
+tab.trans.customers <- dat.trans[, .('Number of Customers' = length(unique(customer_id)))]
+
+#Total Revenue
+tab.trans.revenue <- dat.trans[, .('Total Revenue' = sum(price*quantity))]
+tab.trans.revenue <- tab.trans.revenue[, lapply(X = .SD, FUN = "round.numerics", digits = 1)]
+
+```
+
+The transaction dataset includes customer_id, product_id, price, quantity, and time.  
+In this month, there were `r tab.trans.transactions` transactions for `r tab.trans.customers` customers which resulted in $`r tab.trans.revenue` of revenue. 
+The table below shows the top 5 customers that spent the most in this period. 
+
+
+```{r transactions_table}
+tab.trans.top.spenders <- dat.trans[,.(amount_spent=sum(price)), by = customer.id.name]
+setorderv(x = tab.trans.top.spenders, cols = "amount_spent", order = -1)
+tab.trans.top.spenders <- tab.trans.top.spenders[1:5]
+tab.trans.top.spenders <- tab.trans.top.spenders[, lapply(X = .SD, FUN = "round.numerics", digits = 1)]
+
+datatable(tab.trans.top.spenders)
+```
+
+## Part 3:  Generalization {.tabset}
+
+- goal is to integrate part 1 with new data, part 3 has eye on part 2 design.  
+- creating the infrastructure for monthly data, quarterly etc.  
+
+This part of the report will be directed internally to your team's engagement manager.  The idea is to present these approaches to your team.  The work will then be conveyed to the client's technical team and middle managers who are working closely with you on the project.  Plan your communication accordingly.
+
+### Q1 
+
+#### Question
+
+Did you see any problems with the data set?  If so, whom would you report them to, and what would you do to address them?  What would be different about the next version of the data?
+
+#### Answer
+
+I found several problems with the dataset.  To start, there are inconsistencies in the time format between the transactions and views tables.  The transaction dataset has time in POSIXct format, while the views dataset has time stored as a character format.  Although it is not difficult to standardize the time variable in both datasets, it is an inconvenience that can and should be eliminated.  Consistency in variable types is key in any data science project.  Moreover, on the topic of the time variable, the time stamps do not specify time zone - this problem can be address to the firm that collects the views and transaction data to ensure the timestamps are uniform.  Since the datasets contain customers from across the country, setting the timestamps to UTC is ideal to maintain consistency.  The changes in the time variables in the views and the transaction datasets would allow data scientists involved in all facets of the company (inventory management, sales, etc.) to produce accurate recommendations. 
+
+Another problem with the datasets, is in the transactions table.  The transactions are divided among products, but not the entire 'shopping cart'.  Each row of data is considered one transaction, however what if a customer purchased mulitple products in the same sitting?  Moreover, the number of transactions per customer can be misinterpreted as the data does not group the transactions by the entire shopping cart. To address this, I would add a transaction identifier, which should not be difficult to implement.  The next version of the data would allow users to view customer transactions by their grouping, providing an insight into customer purchasing trends.  
+
+
+### Q2
+
+#### Question
+
+Now generate a version of the same report using the data on views and transactions from the month of February 2020.
+
+In building this report, do not create a new RMarkdown file.  Instead, build a small .R file that allows the user to specify some parameters (e.g. the names of the files).  Then use the **render** function in the **rmarkdown** library to run the report.  Supply these new parameters as a list object in the **params** input.  Then you can make use of these parameters within the RMarkdown file.  For instance, if your file name is **"views -- January 2020.csv"** and it is stored as params\$views.file, then you can read the data with **fread(input = params\$views.file)**
+
+Use the **dir.create** function to build new subfolders to store each month's report.  Specify a name for the output file when calling the **render** function.  Use this method to generate the separate reports for January and February.
+
+Briefly describe your process for implementing this automated approach.  What work would a non-technical user need to perform to run this script without your involvement?
+
+
+#### Answer
+
+A non-technical user would need to update the dates to access the correct files to import.  
+
+
+*Struggled to actually produce the report, please see my attempt at code below
+
+#Render function
+render_report <- function(beginning.date, ending.date) {
+template <- "Template-- Part2.rmd"
+
+out_file <- sprintf("../Reports/Monthly Reports/%s%s", the.year, the.month)
+
+parameters <- list(beginning.date, ending.date)
+rmarkdown::render(template, out_file, parameters)
+}
+
+beginning.date <- "2020-02-04"
+ending.date <- "2020-02-08"
+report.name <- "Feb 2020 Monthly Report"
+params<- list(beginning.date = beginning.date, ending.date = ending.date, report.name = report.name)
+the.year <- lubridate::year(ending.date)
+the.month <- lubridate::month(ending.date)
+out.path <- sprintf("../Reports/Monthly Reports/%s%s", the.year, the.month)
+dir.create(path = out.path, showWarnings = F, recursive = T)
+
+### Q3
+
+#### Question
+
+What are the advantages of creating an automated approach to routine reporting?
+
+#### Answers
+
+The first advantage that comes to mind for an automated report is eliminating the possibility for error.  Having a standard operating procedure, (in this case, a rmarkdown template with instructions and designated sections), allows for reproducibility.  
+
+Another advantages of creating an automated approach to routine reporting is increasing our internal team's bandwidth.  By having an automation infrastructure in place, it would take minutes, not hours to update a report with new data, parameters, variables, etc.  The obvious benefit of automation is this allows our internal team to take on more projects, increasing revenue, and promoting our brand.  By saving time, users of the report can also get the information needed instantly and as a result, make more informed business decisions, and capitalize on opportunities.  
+
+An automated report allows the client or colleague with the opportunity to run a report on their own, without having to set a meeting.  Furthermore, a non-technical audience can access the report, follow the instructions at the top, and simply press run and the report is in their hands without any frustration.  Code can be very intimiating for non-technical users, and automation can make their process a lot easier.  
+
+
+## Part 4:  Opportunities {.tabset}
+
+This part of the report will be directed externally to your client's senior leadership.  Your work will help to determine the future direction of the project and the company's contract with this client.  Plan your communication accordingly.
+
+### Q1
+
+#### Question
+
+How would you build on the reporting capabilities that you have created?  What would you design next?
+
+#### Answer
+
+While the current report provides valuable information, it is lacking a major component: visualizations.  Reporting can be a tedious procedure that is often overlooked by senior leadership as basic data tables are not always eye catching due to the lack of aesthetics.  Building different colorful charts to tell a story of the data, rather than just having the data in a table can be very beneficial for the reader.  
+
+Additionally, this report is not interactive, a feature in reporting that is gaining popularity.  I would build a Shiny application in R to allow users to select the variables, time period, type of customer segments to view and interact with the data.  The Shiny application would contain datatables, graphs, and even a timeline that shows customer viewing and transaction trends.  
+
+### Q2
+
+#### Question
+
+What are some opportunities to learn valuable information and inform strategic decisions?  List a number of questions that you might explore.
+
+#### Answer
+
+The four provided datasets contain sufficient variables and sample sizes to investigate customer, product, views, and transaction trends beyond the baseline analysis already included in this report.
+The following opportunities can provide insights to inform strategic decisions.
+
+1. Marketing Campaign
+If interested in launching a marketing campaign, how would the client know which customer segments and/or which customer segments to select to provide the best chance at increasing sales: Which customer segments should the client select and why?
+
+2. Pricing
+This report provides information on the total revenue for each product type, most viewed products, and customer monthly spending.  However, it does not investigate the relationship between income groups and the types of products they purchase.
+After creating income groups, e.g. < $50,000, > $150,000 etc. within each group, are the certain products that are more attractive to a specific income group than others?  
+If income groups are segmented with age, region, gender, can a trend be determined to evaluate product popularity?
+The goal of these questions are to explore if the pricing of products is accurate.  For example, if a specific coat is only being purchased by customers with an income over $100,000, does the price need to be lowered to attract lower income groups?  Or is the quality of the product so good that the price can increase?  Does a product need a lower-end equivalent and/or higher-end equivalent for people based on their income?  
+
+3. Discount opportunities
+Given the data allows the exploration into what customers view which products at specific dates and then if they purchased the product or not, are there specific months where customers viewed products more than they purchased? To go a step further, include the customer segments into that question.  Furthermore, lets say customers from a lower income group are constantly viewing a specific coat during December.  If there was a discount code directed to that specific income group, would they purchase the product?  
+How can pricing and sales be optimized based on the calender year?  
+What months are products purchased?  Does holiday season makeup majority of yearly sales? 
+
+
+
+### Q3
+
+#### Question
+
+How would you approach other decision makers within the client's organization to assess their priorities and help them better utilize the available information?
+
+
+#### Answer
+
+First, I would need to understand the vision and priorities of the client.  Decision makers come from various backgrounds and have different needs to solve problems.  I would approach each decision maker differently, depending on their responsibilities. To start, I would make a list of decisions that could potentially arise in the coming quarter, mid-year review and annual report. For example, if I was targeting the Chief Marketing Officer, I would have a plan in place to optimize the client's marketing efforts.  Based on customer segments and the time of year, I would present a blueprint on how to launch a targeted marketing campaign in order to increase sales and brand reach.  
+
+Moreover, in order to better utilize the available information, the automated reports can assist in time management, so decision makers aren't scrambling to make last minute decisions.Decision makers are constantly putting out fires, and as a result it is imperative to have potential solutions to the problems as backup.  By asking decision makers their expectations, I can cater the reports to solve their problems, reducing possibilities of misinformation and promoting standard operating procedure.  
+
+### Q4
+
+**Video Submission**:  Make a 2-minute pitch to the client with a proposal for the next phase of work.  Include in your request a budget, a time frame, and staffing levels.  Explain why this proposal would be valuable for the client and worth the investment in your consulting services.  Please submit this answer as a short video recording. You may use any video recording program you feel comfortable with. The only requirements are that you are visible and audible in the video.  You may also submit a file of slides if that is part of your pitch.
+
